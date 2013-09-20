@@ -1,0 +1,15 @@
+<library path="src">
+  <class name="PyConsole"
+	 type="rqt_dynamic_graph.py_console.PyConsole"
+	 base_class_type="qt_gui_py::Plugin">
+    <description>
+      A Python GUI plugin providing an interactive Python console.
+    </description>
+    <qtgui>
+      <label>Dynamic Graph Console</label>
+      <icon type="theme">applications-python</icon>
+      <statustip>Open a Python interpreter connected to the Stack of
+      Tasks.</statustip>
+    </qtgui>
+  </class>
+</library>
