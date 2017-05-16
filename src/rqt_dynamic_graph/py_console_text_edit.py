@@ -43,6 +43,7 @@ import roslib; roslib.load_manifest('rqt_dynamic_graph')
 import rospy
 
 import dynamic_graph_bridge.srv
+import dynamic_graph_bridge_msgs.srv
 
 class PyConsoleTextEdit(ConsoleTextEdit):
     _color_stdin = Qt.darkGreen
@@ -56,7 +57,7 @@ class PyConsoleTextEdit(ConsoleTextEdit):
 
         self.cache = ""
         self._client = rospy.ServiceProxy(
-            'run_command', dynamic_graph_bridge.srv.RunCommand, True)
+            'run_command', dynamic_graph_bridge_msgs.srv.RunCommand, True)
 
         self._comment_writer.write('Python %s on %s\n' % (sys.version.replace('\n', ''), sys.platform))
         self._comment_writer.write('Qt bindings: %s version %s\n' % (QT_BINDING, QT_BINDING_VERSION))
@@ -82,18 +83,18 @@ class PyConsoleTextEdit(ConsoleTextEdit):
                     if not retry:
                         print("Connection to remote server lost. Reconnecting...")
                     self._client = rospy.ServiceProxy(
-                        'run_command', dynamic_graph_bridge.srv.RunCommand, True)
+                        'run_command', dynamic_graph_bridge_msgs.srv.RunCommand, True)
                 response = self._client(str(source))
-                if response.stdout != "":
-                    print(response.stdout[:-1])
-                if response.stderr != "":
-                    print(response.stderr[:-1])
+                if response.standardoutput != "":
+                    print(response.standardoutput[:-1])
+                if response.standarderror != "":
+                    print(response.standarderror[:-1])
                 elif response.result != "None":
                     print(response.result)
             except rospy.ServiceException, e:
                 print("Connection to remote server lost. Reconnecting...")
                 self._client = rospy.ServiceProxy(
-                    'run_command', dynamic_graph_bridge.srv.RunCommand, True)
+                    'run_command', dynamic_graph_bridge_msgs.srv.RunCommand, True)
                 if retry:
                     self.cache = source
                     self._runcode(code, False)
