@@ -36,7 +36,7 @@ from qt_gui_py_common.simple_settings_dialog import SimpleSettingsDialog
 from rqt_dynamic_graph.py_console_widget import PyConsoleWidget
 
 try:
-    from spyder_console_widget import SpyderConsoleWidget
+    from rqt_dynamic_graph.spyder_console_widget import SpyderConsoleWidget
     _has_spyderlib = True
 except ImportError:
     _has_spyderlib = False
