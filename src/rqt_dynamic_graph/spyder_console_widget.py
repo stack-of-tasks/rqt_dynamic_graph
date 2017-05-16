@@ -33,14 +33,21 @@
 from python_qt_binding.QtGui import QFont
 
 from spyderlib.widgets.internalshell import InternalShell
-from spyderlib.utils.module_completion import moduleCompletion
+from spyderlib.utils.module_completion import module_completion as moduleCompletion
 
 import roslib; roslib.load_manifest('rqt_dynamic_graph')
 import rospy
 
 import dynamic_graph_bridge.srv
+import dynamic_graph_bridge_msgs.srv
+
+from spyderlib.utils.dochelpers import getobjdir
 
 class SpyderConsoleWidget(InternalShell):
+    _multi_line_char = ':'
+    _multi_line_indent = '    '
+    _prompt = ('>>> ', '... ')  # prompt for single and multi line
+
     def __init__(self, context=None):
         my_locals = {
             'context': context
@@ -49,20 +56,105 @@ class SpyderConsoleWidget(InternalShell):
 
         self.cache = ""
         self._client = rospy.ServiceProxy(
-            'run_command', dynamic_graph_bridge.srv.RunCommand, True)
+            'run_command', dynamic_graph_bridge_msgs.srv.RunCommand, True)
 
         self.setObjectName('SpyderConsoleWidget')
         self.set_pythonshell_font(QFont('Mono'))
         self.interpreter.restore_stds()
 
+        self._multi_line = False
+        self._multi_line_level = 0
+        self._command = ''
+
     def get_module_completion(self, objtxt):
         """Return module completion list associated to object name"""
+        # FIXME: This executes on the local machine, so it may suggest modules
+        # that are not there on the robot!
         return moduleCompletion(objtxt)
 
-    def run_command(self, code):
+    def get_dir(self, objtxt):
+        """Return dir(object)"""
+        if(objtxt is None):
+            return;
+        source = 'dir('+objtxt+')';
+        response = self._runcode(source);
+        if(response is None):
+            return;
+        res = response.result[2:-2].split("', '");
+
+        # check whether the object is an entity
+        if('signals' in res):
+            source = '[s.name.split("::")[-1] for s in '+objtxt+'.signals()]';
+            response = self._runcode(source);
+            if(response != None):
+                res += response.result[2:-2].split("', '");
+            source = objtxt+'.commands()';
+            response = self._runcode(source);
+            if(response != None):
+                res += response.result[2:-2].split("', '");
+        return res;
+
+    def get_globals_keys(self):
+        """Return shell globarls() keys"""
+        response = self._runcode('globals().keys()');
+        if(response is None):
+            return;
+        return response.result[2:-2].split("', '");
+            
+
+    def get__doc__(self, objtxt):
+        """Get object __doc__"""
+        if(objtxt is None):
+            return;
+        source = 'help('+objtxt+')';
+        response = self._runcode(source);
+        if(response is None):
+            return;
+        return response.standardoutput;
+
+    def __flush_eventqueue(self):
+        """Flush keyboard event queue"""
+        while self.eventqueue:
+            past_event = self.eventqueue.pop(0)
+            self.postprocess_keyevent(past_event)
+
+    #------ Keyboard events
+    def on_enter(self, command):
+        """on_enter"""
+        if len(command) > 0:
+            self.add_to_history(command)
+            # handle multi-line commands
+            if command[-1] == self._multi_line_char:
+                self._command += self._multi_line_indent * self._multi_line_level + command + '\n'
+                self._multi_line = True
+                self._multi_line_level += 1
+            elif self._multi_line:
+                self._command += self._multi_line_indent * self._multi_line_level + command + '\n'
+            else:  # single line command
+                self.execute_command(command)
+                self._command = ''
+        else:  # new line was is empty
+            if self._multi_line:  # multi line done
+              self.execute_command(self._command)
+              self._command = ''
+              self._multi_line = False
+              self._multi_line_level = 0
+        self.new_prompt(self._prompt[self._multi_line] + self._multi_line_indent * self._multi_line_level);
+        self.__flush_eventqueue()
+
+    def run_command(self, code, history=True):
+        if not code:
+            code = ''
         self.interpreter.redirect_stds()
-        super(SpyderConsoleWidget, self).run_command("")
-        self._runcode(code)
+        #super(SpyderConsoleWidget, self).run_command("")
+        response = self._runcode(code)
+        if(response != None):
+            if response.standardoutput != "":
+                print(response.standardoutput[:-1])
+            if response.standarderror != "":
+                print(response.standarderror[:-1])
+            elif response.result != "None":
+                print(response.result)
         self.flush()
         self.interpreter.restore_stds()
 
@@ -78,22 +170,17 @@ class SpyderConsoleWidget(InternalShell):
                     self._client = rospy.ServiceProxy(
                         'run_command', dynamic_graph_bridge.srv.RunCommand, True)
                 response = self._client(str(source))
-                if response.stdout != "":
-                    print(response.stdout[:-1])
-                if response.stderr != "":
-                    print(response.stderr[:-1])
-                elif response.result != "None":
-                    print(response.result)
-                print("\n")
+                return response;
             except rospy.ServiceException, e:
                 print("Connection to remote server lost. Reconnecting...")
                 self._client = rospy.ServiceProxy(
-                    'run_command', dynamic_graph_bridge.srv.RunCommand, True)
+                    'run_command', dynamic_graph_bridge_msgs.srv.RunCommand, True)
                 if retry:
                     self.cache = source
                     self._runcode(code, False)
                 else:
                     print("Failed to connect. Is Stack of Tasks running?")
+        return None;
 
     def shutdown(self):
         self.exit_interpreter()
