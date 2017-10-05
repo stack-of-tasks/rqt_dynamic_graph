@@ -45,7 +45,7 @@ from spyderlib.utils.dochelpers import getobjdir
 
 class SpyderConsoleWidget(InternalShell):
     _multi_line_char = ':'
-    _multi_line_indent = '    '
+    _multi_line_indent = ''
     _prompt = ('>>> ', '... ')  # prompt for single and multi line
 
     def __init__(self, context=None):
@@ -171,7 +171,7 @@ class SpyderConsoleWidget(InternalShell):
                         'run_command', dynamic_graph_bridge.srv.RunCommand, True)
                 response = self._client(str(source))
                 return response;
-            except rospy.ServiceException, e:
+            except (rospy.ServiceException, rospy.exceptions.TransportTerminated) as e:
                 print("Connection to remote server lost. Reconnecting...")
                 self._client = rospy.ServiceProxy(
                     'run_command', dynamic_graph_bridge_msgs.srv.RunCommand, True)
