@@ -44,12 +44,14 @@ import dynamic_graph_bridge_msgs.srv
 from spyderlib.utils.dochelpers import getobjdir
 
 from datetime import datetime
+import time
 import os
 
 class SpyderConsoleWidget(InternalShell):
     _multi_line_char = ':'
     _multi_line_indent = ''
     _prompt = ('>>> ', '... ')  # prompt for single and multi line
+    _log_time_diff = 60 # min number of seconds between two time prints in the log file
 
     def __init__(self, context=None):
         my_locals = {
@@ -75,6 +77,7 @@ class SpyderConsoleWidget(InternalShell):
             if(not os.path.exists(path)):
                 os.mkdir(path)
             self.log = open(path+datetime.now().strftime("%y_%m_%d__%H_%M")+'.log', 'a') 
+            self.log_time = time.time()
             #print "Log file successfully open"
         except Exception as e:
             print "ERROR: Could not open log file!"
@@ -173,6 +176,11 @@ class SpyderConsoleWidget(InternalShell):
         self.flush()
         self.interpreter.restore_stds()
         if(self.log is not None):
+            timestamp = time.time()
+            if(timestamp-self.log_time > self._log_time_diff):
+                self.log_time = timestamp
+                self.log.write('\n# [rqt_dynamic_graph] Time: '+datetime.now().strftime("%H:%M:%S")+'\n')
+
             self.log.write(code+'\n')
             self.log.flush()
 
