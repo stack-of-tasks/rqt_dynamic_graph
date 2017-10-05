@@ -43,6 +43,9 @@ import dynamic_graph_bridge_msgs.srv
 
 from spyderlib.utils.dochelpers import getobjdir
 
+from datetime import datetime
+import os
+
 class SpyderConsoleWidget(InternalShell):
     _multi_line_char = ':'
     _multi_line_indent = ''
@@ -65,6 +68,18 @@ class SpyderConsoleWidget(InternalShell):
         self._multi_line = False
         self._multi_line_level = 0
         self._command = ''
+
+        # open text file for logging
+        try:
+            path = os.path.expanduser('~/.rqt_dynamic_graph/');
+            if(not os.path.exists(path)):
+                os.mkdir(path)
+            self.log = open(path+datetime.now().strftime("%y_%m_%d__%H_%M")+'.log', 'a') 
+            #print "Log file successfully open"
+        except Exception as e:
+            print "ERROR: Could not open log file!"
+            print e
+            self.log = None
 
     def get_module_completion(self, objtxt):
         """Return module completion list associated to object name"""
@@ -157,6 +172,9 @@ class SpyderConsoleWidget(InternalShell):
                 print(response.result)
         self.flush()
         self.interpreter.restore_stds()
+        if(self.log is not None):
+            self.log.write(code+'\n')
+            self.log.flush()
 
     def _runcode(self, code, retry = True):
         self.cache += code + "\n"
