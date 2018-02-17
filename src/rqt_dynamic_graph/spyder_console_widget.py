@@ -31,9 +31,9 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 from python_qt_binding.QtGui import QFont
-
-from spyderlib.widgets.internalshell import InternalShell
-from spyderlib.utils.module_completion import module_completion as moduleCompletion
+from IPython.Shell import IPShellQt
+#from spyderlib.widgets.internalshell import InternalShell
+#from spyderlib.utils.module_completion import module_completion as moduleCompletion
 
 import roslib; roslib.load_manifest('rqt_dynamic_graph')
 import rospy
@@ -47,7 +47,7 @@ from datetime import datetime
 import time
 import os
 
-class SpyderConsoleWidget(InternalShell):
+class SpyderConsoleWidget(IPShellQt):
     _multi_line_char = ':'
     _multi_line_indent = ''
     _prompt = ('>>> ', '... ')  # prompt for single and multi line
@@ -63,7 +63,7 @@ class SpyderConsoleWidget(InternalShell):
         self._client = rospy.ServiceProxy(
             'run_command', dynamic_graph_bridge_msgs.srv.RunCommand, True)
 
-        self.setObjectName('SpyderConsoleWidget')
+        self.setObjectName('IPShellQtConsoleWidget')
         self.set_pythonshell_font(QFont('Mono'))
         self.interpreter.restore_stds()
 
@@ -88,7 +88,7 @@ class SpyderConsoleWidget(InternalShell):
         """Return module completion list associated to object name"""
         # FIXME: This executes on the local machine, so it may suggest modules
         # that are not there on the robot!
-        return moduleCompletion(objtxt)
+        # return moduleCompletion(objtxt)
 
     def get_dir(self, objtxt):
         """Return dir(object)"""
