@@ -34,7 +34,14 @@ import os
 import rospkg
 
 from python_qt_binding import loadUi
-from python_qt_binding.QtGui import QWidget
+
+try:
+    # for retrocompatibility
+    from python_qt_binding.QtGui import QWidget
+except:
+    # for compatibility with pyqt5 or higher 
+    from python_qt_binding.QtWidgets import QWidget
+
 import rqt_dynamic_graph.py_console_text_edit
 
 class PyConsoleWidget(QWidget):

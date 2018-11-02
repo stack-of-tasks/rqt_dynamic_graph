@@ -29,8 +29,12 @@
 # LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
 # ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
-
-from python_qt_binding.QtGui import QFont
+try:
+    # for retrocompatibility
+    from python_qt_binding.QtGui import QFont
+except:
+    # for compatibility with pyqt5 or higher 
+    from python_qt_binding.QtWidgets import QFont
 
 from spyderlib.widgets.internalshell import InternalShell
 from spyderlib.utils.module_completion import module_completion as moduleCompletion
