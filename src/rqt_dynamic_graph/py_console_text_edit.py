@@ -31,6 +31,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import sys
+import os
 from code import InteractiveInterpreter
 from exceptions import SystemExit
 
@@ -49,6 +50,12 @@ except:
     from dynamic_graph_manager.srv import RunCommand as ros_srv_RunCommand
     run_command_service_name = '/dynamic_graph/run_python_command'
 
+# manages python history
+import pickle
+# manages the log and time stamps
+from datetime import datetime
+import time
+
 class PyConsoleTextEdit(ConsoleTextEdit):
     _color_stdin = Qt.darkGreen
     _multi_line_char = ':'
@@ -60,25 +67,48 @@ class PyConsoleTextEdit(ConsoleTextEdit):
         super(PyConsoleTextEdit, self).__init__(parent)
 
         self.cache = ""
-        self._client = self.get_RunCommand_client()
+        self._client = self._get_RunCommand_client()
 
         self._comment_writer.write('Python %s on %s\n' % (sys.version.replace('\n', ''), sys.platform))
         self._comment_writer.write('Qt bindings: %s version %s\n' % (QT_BINDING, QT_BINDING_VERSION))
 
         self._add_prompt()
 
-    def get_RunCommand_client(self):
-        print ("get_RunCommand_client")
-        return rospy.ServiceProxy(run_command_service_name,
-                                  ros_srv_RunCommand, True)
+        self._init_log_and_history()
 
     def update_interpreter_locals(self, newLocals):
         pass
+
+    def _get_RunCommand_client(self):
+        return rospy.ServiceProxy(run_command_service_name,
+                                  ros_srv_RunCommand, True)
+
+    def _init_log_and_history(self):
+        self.log_path = "%s/.rqt_dynamic_graph/" % os.environ["HOME"]
+        self.python_hist_file = self.log_path + 'python_history.pkl'
+        self.log_file = (self.log_path +
+                         datetime.now().strftime("%y_%m_%d__%H_%M")+'.log')
+        # open text file for logging
+        try:
+            if(not os.path.exists(self.log_path)):
+                os.mkdir(self.log_path)
+            # we get the standard session and load it
+            if os.path.exists(self.python_hist_file):
+                self._history = pickle.load(open(self.python_hist_file, 'r'))
+            else:
+                self._history = []
+            self.log = open(self.log_file, 'a')
+            self.log_time = time.time()
+        except Exception as e:
+            print "ERROR: Could not open log or history file!"
+            print e
+            self.log = None
 
     def _exec_code(self, code):
         try:
             self._runcode(code)
         except SystemExit:  # catch sys.exit() calls, so they don't close the whole gui
+            pickle.dump(self._history, open(self.python_hist_file, 'w'))
             self.exit.emit()
 
     def _runcode(self, code, retry = True):
@@ -90,7 +120,7 @@ class PyConsoleTextEdit(ConsoleTextEdit):
                 if not self._client:
                     if not retry:
                         print("Connection to remote server lost. Reconnecting...")
-                    self._client = self.get_RunCommand_client()
+                    self._client = self._get_RunCommand_client()
                 response = self._client(str(source))
                 if response.standardoutput != "":
                     print(response.standardoutput[:-1])
@@ -98,9 +128,10 @@ class PyConsoleTextEdit(ConsoleTextEdit):
                     print(response.standarderror[:-1])
                 elif response.result != "None":
                     print(response.result)
+                pickle.dump(self._history, open(self.python_hist_file, 'w'))
             except rospy.ServiceException, e:
                 print("Connection to remote server lost. Reconnecting...")
-                self._client = self.get_RunCommand_client()
+                self._client = self._get_RunCommand_client()
                 if retry:
                     self.cache = source
                     self._runcode(code, False)
