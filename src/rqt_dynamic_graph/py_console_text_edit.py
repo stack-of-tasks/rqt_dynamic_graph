@@ -69,8 +69,10 @@ class PyConsoleTextEdit(ConsoleTextEdit):
         self.cache = ""
         self._client = self._get_RunCommand_client()
 
-        self._comment_writer.write('Python %s on %s\n' % (sys.version.replace('\n', ''), sys.platform))
-        self._comment_writer.write('Qt bindings: %s version %s\n' % (QT_BINDING, QT_BINDING_VERSION))
+        self._comment_writer.write(
+            'Python %s on %s\n' % (sys.version.replace('\n', ''), sys.platform))
+        self._comment_writer.write(
+            'Qt bindings: %s version %s\n' % (QT_BINDING, QT_BINDING_VERSION))
 
         self._add_prompt()
 
@@ -107,7 +109,8 @@ class PyConsoleTextEdit(ConsoleTextEdit):
     def _exec_code(self, code):
         try:
             self._runcode(code)
-        except SystemExit:  # catch sys.exit() calls, so they don't close the whole gui
+        # catch sys.exit() calls, so they don't close the whole gui
+        except SystemExit:
             pickle.dump(self._history, open(self.python_hist_file, 'w'))
             self.exit.emit()
 
@@ -119,7 +122,8 @@ class PyConsoleTextEdit(ConsoleTextEdit):
             try:
                 if not self._client:
                     if not retry:
-                        print("Connection to remote server lost. Reconnecting...")
+                        print("Connection to remote server lost. " +
+                              "Reconnecting...")
                     self._client = self._get_RunCommand_client()
                 response = self._client(str(source))
                 if response.standardoutput != "":
