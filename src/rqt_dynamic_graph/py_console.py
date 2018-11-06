@@ -48,11 +48,6 @@ try:
 except ImportError:
     _has_spyderlib = False
 
-if _has_spyderlib:
-    print "Using spyderlib"
-else:
-    print "Using pyconsole"
-
 class PyConsole(Plugin):
     """
     Plugin providing an interactive Python console

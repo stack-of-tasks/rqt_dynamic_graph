@@ -78,8 +78,53 @@ class PyConsoleTextEdit(ConsoleTextEdit):
 
         self._init_log_and_history()
 
+    def keyPressEvent(self, event):
+        prompt_length = len(self._prompt[self._multi_line])
+        block_length = self.document().lastBlock().length()
+        document_length = self.document().characterCount()
+        line_start = document_length - block_length
+        prompt_position = line_start + prompt_length
+
+        # only handle keys if cursor is in the last line
+        if self.textCursor().position() >= prompt_position:
+            if event.key() == Qt.Key_Tab:
+                last_line = self.document().lastBlock().text()[prompt_length:]
+                response = self._get_dir(last_line)
+                if type(response) == list:
+                    self._stdout.write('\n[')
+                    for r in response:
+                        self._stdout.write(r + ', ')
+                    self._stdout.write(']\n')
+                self._add_prompt()
+                return None
+
+        # allow all other key events
+        super(PyConsoleTextEdit, self).keyPressEvent(event)
+
     def update_interpreter_locals(self, newLocals):
         pass
+
+    def _get_dir(self, objtxt):
+        """Return dir(object)"""
+        if(objtxt is None):
+            return;
+        source = 'dir('+objtxt+')';
+        response = self._runcode(source);
+        if((response is None) or (response.result is None)):
+            return;
+        res = response.result[2:-2].split("', '");
+
+        # check whether the object is an entity
+        if('signals' in res):
+            source = '[s.name.split("::")[-1] for s in '+objtxt+'.signals()]';
+            response = self._runcode(source);
+            if(response != None):
+                res += response.result[2:-2].split("', '");
+            source = objtxt+'.commands()';
+            response = self._runcode(source);
+            if(response != None):
+                res += response.result[2:-2].split("', '");
+        return res;
 
     def _get_RunCommand_client(self):
         return rospy.ServiceProxy(run_command_service_name,
@@ -108,11 +153,19 @@ class PyConsoleTextEdit(ConsoleTextEdit):
 
     def _exec_code(self, code):
         try:
-            self._runcode(code)
+            self._print_response(self._runcode(code))
         # catch sys.exit() calls, so they don't close the whole gui
         except SystemExit:
             pickle.dump(self._history, open(self.python_hist_file, 'w'))
             self.exit.emit()
+
+    def _print_response(self, response):
+        if response.standardoutput != "":
+            self._stdout.write(response.standardoutput[:-1] + '\n')
+        if response.standarderror != "":
+            self._stderr.write(response.standarderror[:-1] + '\n')
+        elif response.result != "None":
+            self._stdout.write(response.result + '\n')
 
     def _runcode(self, code, retry = True):
         self.cache += code + "\n"
@@ -126,14 +179,9 @@ class PyConsoleTextEdit(ConsoleTextEdit):
                               "Reconnecting...")
                     self._client = self._get_RunCommand_client()
                 response = self._client(str(source))
-                if response.standardoutput != "":
-                    print(response.standardoutput[:-1])
-                if response.standarderror != "":
-                    print(response.standarderror[:-1])
-                elif response.result != "None":
-                    print(response.result)
                 # not very clever but I cannot detect when the gui is closing...
                 pickle.dump(self._history, open(self.python_hist_file, 'w'))
+                return response
             except rospy.ServiceException, e:
                 print("Connection to remote server lost. Reconnecting...")
                 self._client = self._get_RunCommand_client()
