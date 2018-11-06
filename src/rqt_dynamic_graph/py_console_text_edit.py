@@ -128,6 +128,7 @@ class PyConsoleTextEdit(ConsoleTextEdit):
                     print(response.standarderror[:-1])
                 elif response.result != "None":
                     print(response.result)
+                # not very clever but I cannot detect when the gui is closing...
                 pickle.dump(self._history, open(self.python_hist_file, 'w'))
             except rospy.ServiceException, e:
                 print("Connection to remote server lost. Reconnecting...")
