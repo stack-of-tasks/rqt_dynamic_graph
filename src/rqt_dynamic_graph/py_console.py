@@ -30,10 +30,11 @@
 # ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-try:
+from python_qt_binding import QT_BINDING_VERSION
+if float(QT_BINDING_VERSION.split(".")[0]) < 5:
     # for retrocompatibility
     from python_qt_binding.QtGui import QVBoxLayout, QWidget
-except:
+else:
     # for compatibility with pyqt5 or higher 
     from python_qt_binding.QtWidgets import QVBoxLayout, QWidget
     
@@ -47,6 +48,10 @@ try:
 except ImportError:
     _has_spyderlib = False
 
+if _has_spyderlib:
+    print "Using spyderlib"
+else:
+    print "Using pyconsole"
 
 class PyConsole(Plugin):
     """
