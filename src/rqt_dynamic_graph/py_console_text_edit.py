@@ -32,7 +32,6 @@
 
 import sys
 import os
-from code import InteractiveInterpreter
 from exceptions import SystemExit
 
 from python_qt_binding import QT_BINDING, QT_BINDING_VERSION
@@ -43,6 +42,7 @@ from qt_gui_py_common.console_text_edit import ConsoleTextEdit
 import roslib; roslib.load_manifest('rqt_dynamic_graph')
 import rospy
 
+from dynamic_graph.ros.dgcompleter import DGCompleter
 try:
     from dynamic_graph_bridge_msgs.srv import RunCommand as ros_srv_RunCommand
     run_command_service_name = 'run_command'
@@ -78,6 +78,9 @@ class PyConsoleTextEdit(ConsoleTextEdit):
 
         self._init_log_and_history()
 
+        # for autocompletion
+        self.completer = DGCompleter(self._client)
+
     def keyPressEvent(self, event):
         prompt_length = len(self._prompt[self._multi_line])
         block_length = self.document().lastBlock().length()
@@ -89,13 +92,27 @@ class PyConsoleTextEdit(ConsoleTextEdit):
         if self.textCursor().position() >= prompt_position:
             if event.key() == Qt.Key_Tab:
                 last_line = self.document().lastBlock().text()[prompt_length:]
-                response = self._get_dir(last_line)
-                if type(response) == list:
-                    self._stdout.write('\n[')
-                    for r in response:
-                        self._stdout.write(r + ', ')
-                    self._stdout.write(']\n')
-                self._add_prompt()
+                possible_responses = []
+                response = ""
+                nb_response = 0
+                while True:
+                    response = self.completer.complete(last_line, nb_response)
+                    if response is not None:
+                        possible_responses.append(response)
+                        nb_response += 1
+                    else:
+                        break
+
+                if len(possible_responses) == 1:
+                    self._clear_current_line(clear_prompt=False)
+                    self._comment_writer.write(possible_responses[0])
+                elif len(possible_responses) > 1:
+                    self._stdout_list(possible_responses)
+                    self._add_prompt()
+                    self._clear_current_line(clear_prompt=False)
+                    new_line = self._common_prefix(possible_responses)
+                    self._comment_writer.write(new_line)
+
                 return None
 
         # allow all other key events
@@ -103,6 +120,23 @@ class PyConsoleTextEdit(ConsoleTextEdit):
 
     def update_interpreter_locals(self, newLocals):
         pass
+
+    def _stdout_list(self, my_list):
+        self._stdout.write('\n[')
+        for el in my_list:
+            self._stdout.write(el + ', ')
+        self._stdout.write(']\n')
+
+    # Return the longest prefix of all list elements.
+    def _common_prefix(self, m):
+        "Given a list of pathnames, returns the longest common leading component"
+        if not m: return ''
+        s1 = min(m)
+        s2 = max(m)
+        for i, c in enumerate(s1):
+            if c != s2[i]:
+                return s1[:i]
+        return s1
 
     def _get_dir(self, objtxt):
         """Return dir(object)"""
@@ -125,6 +159,23 @@ class PyConsoleTextEdit(ConsoleTextEdit):
             if(response != None):
                 res += response.result[2:-2].split("', '");
         return res;
+
+    def _get_globals_keys(self):
+        """Return shell globarls() keys"""
+        response = self._runcode('globals().keys()');
+        if(response is None):
+            return;
+        return response.result[2:-2].split("', '");
+
+    def _get__doc__(self, objtxt):
+        """Get object __doc__"""
+        if(objtxt is None):
+            return;
+        source = 'help('+objtxt+')';
+        response = self._runcode(source);
+        if(response is None):
+            return;
+        return response.standardoutput;
 
     def _get_RunCommand_client(self):
         return rospy.ServiceProxy(run_command_service_name,
