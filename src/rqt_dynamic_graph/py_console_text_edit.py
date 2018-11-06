@@ -42,8 +42,12 @@ from qt_gui_py_common.console_text_edit import ConsoleTextEdit
 import roslib; roslib.load_manifest('rqt_dynamic_graph')
 import rospy
 
-import dynamic_graph_bridge.srv
-import dynamic_graph_bridge_msgs.srv
+try:
+    from dynamic_graph_bridge_msgs.srv import RunCommand as ros_srv_RunCommand
+    run_command_service_name = 'run_command'
+except:
+    from dynamic_graph_manager.srv import RunCommand as ros_srv_RunCommand
+    run_command_service_name = '/dynamic_graph/run_python_command'
 
 class PyConsoleTextEdit(ConsoleTextEdit):
     _color_stdin = Qt.darkGreen
@@ -56,13 +60,17 @@ class PyConsoleTextEdit(ConsoleTextEdit):
         super(PyConsoleTextEdit, self).__init__(parent)
 
         self.cache = ""
-        self._client = rospy.ServiceProxy(
-            'run_command', dynamic_graph_bridge_msgs.srv.RunCommand, True)
+        self._client = self.get_RunCommand_client()
 
         self._comment_writer.write('Python %s on %s\n' % (sys.version.replace('\n', ''), sys.platform))
         self._comment_writer.write('Qt bindings: %s version %s\n' % (QT_BINDING, QT_BINDING_VERSION))
 
         self._add_prompt()
+
+    def get_RunCommand_client(self):
+        print ("get_RunCommand_client")
+        return rospy.ServiceProxy(run_command_service_name,
+                                  ros_srv_RunCommand, True)
 
     def update_interpreter_locals(self, newLocals):
         pass
@@ -82,8 +90,7 @@ class PyConsoleTextEdit(ConsoleTextEdit):
                 if not self._client:
                     if not retry:
                         print("Connection to remote server lost. Reconnecting...")
-                    self._client = rospy.ServiceProxy(
-                        'run_command', dynamic_graph_bridge_msgs.srv.RunCommand, True)
+                    self._client = self.get_RunCommand_client()
                 response = self._client(str(source))
                 if response.standardoutput != "":
                     print(response.standardoutput[:-1])
@@ -93,8 +100,7 @@ class PyConsoleTextEdit(ConsoleTextEdit):
                     print(response.result)
             except rospy.ServiceException, e:
                 print("Connection to remote server lost. Reconnecting...")
-                self._client = rospy.ServiceProxy(
-                    'run_command', dynamic_graph_bridge_msgs.srv.RunCommand, True)
+                self._client = self.get_RunCommand_client()
                 if retry:
                     self.cache = source
                     self._runcode(code, False)
