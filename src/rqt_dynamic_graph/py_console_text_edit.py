@@ -42,13 +42,13 @@ from qt_gui_py_common.console_text_edit import ConsoleTextEdit
 import roslib; roslib.load_manifest('rqt_dynamic_graph')
 import rospy
 
-from dynamic_graph.ros.dgcompleter import DGCompleter
+from dynamic_graph_manager.ros.dgcompleter import DGCompleter
 try:
-    from dynamic_graph_bridge_msgs.srv import RunCommand as ros_srv_RunCommand
-    run_command_service_name = 'run_command'
-except:
     from dynamic_graph_manager.srv import RunCommand as ros_srv_RunCommand
     run_command_service_name = '/dynamic_graph/run_python_command'
+except:
+    from dynamic_graph_bridge_msgs.srv import RunCommand as ros_srv_RunCommand
+    run_command_service_name = 'run_command'
 
 # manages python history
 import pickle
