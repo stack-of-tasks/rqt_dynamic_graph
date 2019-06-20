@@ -31,7 +31,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import sys
-from code import InteractiveInterpreter
+import os
 from exceptions import SystemExit
 
 from python_qt_binding import QT_BINDING, QT_BINDING_VERSION
@@ -42,8 +42,19 @@ from qt_gui_py_common.console_text_edit import ConsoleTextEdit
 import roslib; roslib.load_manifest('rqt_dynamic_graph')
 import rospy
 
-import dynamic_graph_bridge.srv
-import dynamic_graph_bridge_msgs.srv
+from dynamic_graph_manager.ros.dgcompleter import DGCompleter
+try:
+    from dynamic_graph_manager.srv import RunCommand as ros_srv_RunCommand
+    run_command_service_name = '/dynamic_graph/run_python_command'
+except:
+    from dynamic_graph_bridge_msgs.srv import RunCommand as ros_srv_RunCommand
+    run_command_service_name = 'run_command'
+
+# manages python history
+import pickle
+# manages the log and time stamps
+from datetime import datetime
+import time
 
 class PyConsoleTextEdit(ConsoleTextEdit):
     _color_stdin = Qt.darkGreen
@@ -56,22 +67,156 @@ class PyConsoleTextEdit(ConsoleTextEdit):
         super(PyConsoleTextEdit, self).__init__(parent)
 
         self.cache = ""
-        self._client = rospy.ServiceProxy(
-            'run_command', dynamic_graph_bridge_msgs.srv.RunCommand, True)
+        self._client = self._get_RunCommand_client()
 
-        self._comment_writer.write('Python %s on %s\n' % (sys.version.replace('\n', ''), sys.platform))
-        self._comment_writer.write('Qt bindings: %s version %s\n' % (QT_BINDING, QT_BINDING_VERSION))
+        self._comment_writer.write(
+            'Python %s on %s\n' % (sys.version.replace('\n', ''), sys.platform))
+        self._comment_writer.write(
+            'Qt bindings: %s version %s\n' % (QT_BINDING, QT_BINDING_VERSION))
 
         self._add_prompt()
+
+        self._init_log_and_history()
+
+        # for autocompletion
+        self.completer = DGCompleter(self._client)
+
+    def keyPressEvent(self, event):
+        prompt_length = len(self._prompt[self._multi_line])
+        block_length = self.document().lastBlock().length()
+        document_length = self.document().characterCount()
+        line_start = document_length - block_length
+        prompt_position = line_start + prompt_length
+
+        # only handle keys if cursor is in the last line
+        if self.textCursor().position() >= prompt_position:
+            if event.key() == Qt.Key_Tab:
+                last_line = self.document().lastBlock().text()[prompt_length:]
+                possible_responses = []
+                response = ""
+                nb_response = 0
+                while True:
+                    response = self.completer.complete(last_line, nb_response)
+                    if response is not None:
+                        possible_responses.append(response)
+                        nb_response += 1
+                    else:
+                        break
+
+                if len(possible_responses) == 1:
+                    self._clear_current_line(clear_prompt=False)
+                    self._comment_writer.write(possible_responses[0])
+                elif len(possible_responses) > 1:
+                    self._stdout_list(possible_responses)
+                    self._add_prompt()
+                    self._clear_current_line(clear_prompt=False)
+                    new_line = self._common_prefix(possible_responses)
+                    self._comment_writer.write(new_line)
+
+                return None
+
+        # allow all other key events
+        super(PyConsoleTextEdit, self).keyPressEvent(event)
 
     def update_interpreter_locals(self, newLocals):
         pass
 
+    def _stdout_list(self, my_list):
+        self._stdout.write('\n[')
+        for el in my_list:
+            self._stdout.write(el + ', ')
+        self._stdout.write(']\n')
+
+    # Return the longest prefix of all list elements.
+    def _common_prefix(self, m):
+        "Given a list of pathnames, returns the longest common leading component"
+        if not m: return ''
+        s1 = min(m)
+        s2 = max(m)
+        for i, c in enumerate(s1):
+            if c != s2[i]:
+                return s1[:i]
+        return s1
+
+    def _get_dir(self, objtxt):
+        """Return dir(object)"""
+        if(objtxt is None):
+            return;
+        source = 'dir('+objtxt+')';
+        response = self._runcode(source);
+        if((response is None) or (response.result is None)):
+            return;
+        res = response.result[2:-2].split("', '");
+
+        # check whether the object is an entity
+        if('signals' in res):
+            source = '[s.name.split("::")[-1] for s in '+objtxt+'.signals()]';
+            response = self._runcode(source);
+            if(response != None):
+                res += response.result[2:-2].split("', '");
+            source = objtxt+'.commands()';
+            response = self._runcode(source);
+            if(response != None):
+                res += response.result[2:-2].split("', '");
+        return res;
+
+    def _get_globals_keys(self):
+        """Return shell globarls() keys"""
+        response = self._runcode('globals().keys()');
+        if(response is None):
+            return;
+        return response.result[2:-2].split("', '");
+
+    def _get__doc__(self, objtxt):
+        """Get object __doc__"""
+        if(objtxt is None):
+            return;
+        source = 'help('+objtxt+')';
+        response = self._runcode(source);
+        if(response is None):
+            return;
+        return response.standardoutput;
+
+    def _get_RunCommand_client(self):
+        return rospy.ServiceProxy(run_command_service_name,
+                                  ros_srv_RunCommand, True)
+
+    def _init_log_and_history(self):
+        self.log_path = "%s/.rqt_dynamic_graph/" % os.environ["HOME"]
+        self.python_hist_file = self.log_path + 'python_history.pkl'
+        self.log_file = (self.log_path +
+                         datetime.now().strftime("%y_%m_%d__%H_%M")+'.log')
+        # open text file for logging
+        try:
+            if(not os.path.exists(self.log_path)):
+                os.mkdir(self.log_path)
+            # we get the standard session and load it
+            if os.path.exists(self.python_hist_file):
+                self._history = pickle.load(open(self.python_hist_file, 'r'))
+            else:
+                self._history = []
+            self.log = open(self.log_file, 'a')
+            self.log_time = time.time()
+        except Exception as e:
+            print "ERROR: Could not open log or history file!"
+            print e
+            self.log = None
+
     def _exec_code(self, code):
         try:
-            self._runcode(code)
-        except SystemExit:  # catch sys.exit() calls, so they don't close the whole gui
+            self._print_response(self._runcode(code))
+        # catch sys.exit() calls, so they don't close the whole gui
+        except SystemExit:
+            pickle.dump(self._history, open(self.python_hist_file, 'w'))
             self.exit.emit()
+
+    def _print_response(self, response):
+        if response.standardoutput != "":
+            self._stdout.write(response.standardoutput[:-1] + '\n')
+        if response.standarderror != "":
+            self._stderr.write(response.standarderror[:-1] + '\n')
+        elif response.result != "None":
+            self._stdout.write(response.result + '\n')
 
     def _runcode(self, code, retry = True):
         self.cache += code + "\n"
@@ -81,20 +226,16 @@ class PyConsoleTextEdit(ConsoleTextEdit):
             try:
                 if not self._client:
                     if not retry:
-                        print("Connection to remote server lost. Reconnecting...")
-                    self._client = rospy.ServiceProxy(
-                        'run_command', dynamic_graph_bridge_msgs.srv.RunCommand, True)
+                        print("Connection to remote server lost. " +
+                              "Reconnecting...")
+                    self._client = self._get_RunCommand_client()
                 response = self._client(str(source))
-                if response.standardoutput != "":
-                    print(response.standardoutput[:-1])
-                if response.standarderror != "":
-                    print(response.standarderror[:-1])
-                elif response.result != "None":
-                    print(response.result)
+                # not very clever but I cannot detect when the gui is closing...
+                pickle.dump(self._history, open(self.python_hist_file, 'w'))
+                return response
             except rospy.ServiceException, e:
                 print("Connection to remote server lost. Reconnecting...")
-                self._client = rospy.ServiceProxy(
-                    'run_command', dynamic_graph_bridge_msgs.srv.RunCommand, True)
+                self._client = self._get_RunCommand_client()
                 if retry:
                     self.cache = source
                     self._runcode(code, False)

@@ -13,6 +13,6 @@ install(DIRECTORY resource
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )
 
-install(PROGRAMS scripts/rqt_dynamic_graph
+install(PROGRAMS node/rqt_dynamic_graph
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )

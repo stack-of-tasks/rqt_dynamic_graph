@@ -21,8 +21,8 @@
   <run_depend>rqt_gui</run_depend>
   <run_depend>rqt_gui_py</run_depend>
 
-  <run_depend>rospy</run_depend>
   <run_depend>dynamic_graph_bridge</run_depend>
+  <run_depend>dynamic_graph_manager</run_depend>
 
   <export>
     <qt_gui plugin="${prefix}/plugin.xml"/>

@@ -30,17 +30,27 @@
 # ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-from python_qt_binding.QtGui import QVBoxLayout, QWidget
+# System imports
+from python_qt_binding import QT_BINDING_VERSION
+if float(QT_BINDING_VERSION.split(".")[0]) < 5:
+    # for retrocompatibility
+    from python_qt_binding.QtGui import QVBoxLayout, QWidget
+else:
+    # for compatibility with pyqt5 or higher 
+    from python_qt_binding.QtWidgets import QVBoxLayout, QWidget
+    
 from qt_gui.plugin import Plugin
 from qt_gui_py_common.simple_settings_dialog import SimpleSettingsDialog
-from rqt_dynamic_graph.py_console_widget import PyConsoleWidget
 
+# Local imports
+#from .utils import _build_common_widget
+from .dg_button import DynamicGraphButton
+from .py_console_widget import PyConsoleWidget
 try:
-    from rqt_dynamic_graph.spyder_console_widget import SpyderConsoleWidget
+    from .spyder_console_widget import SpyderConsoleWidget
     _has_spyderlib = True
 except ImportError:
     _has_spyderlib = False
-
 
 class PyConsole(Plugin):
     """
@@ -57,9 +67,14 @@ class PyConsole(Plugin):
         self._widget.setLayout(QVBoxLayout())
         self._widget.layout().setContentsMargins(0, 0, 0, 0)
         if context.serial_number() > 1:
-            self._widget.setWindowTitle(self._widget.windowTitle() + \
-                                            (' (%d)' % context.serial_number()))
+            self._widget.setWindowTitle(self._widget.windowTitle() +
+                                        ' (%d)' % context.serial_number())
         self._context.add_widget(self._widget)
+
+        self.dg_actif = "The dynamic graph is running."
+        self.dg_inactif = "The dynamic graph is NOT running."
+        self.dg_button = DynamicGraphButton(self._widget)
+        self._widget.layout().addWidget(self.dg_button)
 
     def _switch_console_widget(self):
         self._widget.layout().removeWidget(self._console_widget)
@@ -86,7 +101,7 @@ class PyConsole(Plugin):
     def trigger_configuration(self):
         options = [
             {'title': 'SpyderConsole', 'description': 'Advanced Python console with tab-completion (needs spyderlib to be installed).', 'enabled': _has_spyderlib},
-            {'title': 'PyConsole', 'description': 'Simple Python console.'},
+            {'title': 'PyConsole', 'description': 'Simple Python console with tab-completion.'},
         ]
         dialog = SimpleSettingsDialog(title='PyConsole Options')
         dialog.add_exclusive_option_group(title='Console Type', options=options, selected_index=int(not self._use_spyderlib))
